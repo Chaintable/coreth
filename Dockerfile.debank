@@ -24,6 +24,11 @@ RUN git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com".
 RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
 RUN go mod edit -replace github.com/consensys/gnark-crypto=github.com/consensys/gnark-crypto@v0.12.1
 RUN go mod edit -replace github.com/crate-crypto/go-ipa=github.com/crate-crypto/go-ipa@v0.0.0-20231025140028-3c0104f4b233
+
+RUN git clone https://github.com/Chaintable/pipeline.git 
+
+RUN git clone https://github.com/Chaintable/libevm.git
+
 # RUN go mod edit -replace github.com/ava-labs/libevm=github.com/Chaintable/libevm@v1.13.14-0.2.0.release-debank-3
 
 RUN GOSUMDB=off go mod tidy
