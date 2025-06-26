@@ -34,13 +34,17 @@ jobs:
         run: |
           echo "REVISION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
-      - name: Build and push image
-        run: |
-          echo ${AVALANCHE_VERSION}
-          docker build --build-arg GITHUB_TOKEN=${{ steps.generate_token.outputs.token }} --build-arg AVALANCHE_VERSION=${AVALANCHE_VERSION} -t ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION} -f ${DOCKERFILE} .
-          docker push ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
-          docker run --name dryrun --rm ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}  /avalanchego/build/avalanchego --version
-          docker rmi ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          file: ${{ env.DOCKERFILE }}
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ matrix.arch }}-${{ env.REVISION }}
+          build-args: |
+            ACCESS_TOKEN=${{ steps.generate-token.outputs.token }}
+            AVALANCHE_VERSION=${{ env.AVALANCHE_VERSION }}
+          provenance: false
 
       - name: Lark Notification
         continue-on-error: true
