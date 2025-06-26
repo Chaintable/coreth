@@ -1,5 +1,5 @@
 # ============= Compilation Stage ================
-FROM golang:1.23.8-bullseye AS builder
+FROM golang:1.23.9-bullseye AS builder
 
 ARG AVALANCHE_VERSION
 ARG GITHUB_TOKEN
