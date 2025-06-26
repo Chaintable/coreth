@@ -1,0 +1,48 @@
+name: "Build new artifacts"
+
+on:
+  pull_request:
+    branches:
+      - "debank"
+  workflow_dispatch:
+
+env:
+  REGISTRY: 294354037686.dkr.ecr.ap-northeast-1.amazonaws.com
+  IMAGE: blockchain-avax-x
+  DOCKERFILE: Dockerfile.debank
+  AVALANCHE_VERSION: v1.13.0
+
+jobs:
+  build-artifacts:
+    strategy:
+      matrix:
+        arch: [amd64]
+    runs-on: [self-hosted, "${{ matrix.arch }}"]
+    steps:
+      - name: Checkout coreth
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: tibdex/github-app-token@v1
+        id: generate-token
+        with:
+          app_id: ${{ secrets.RELEASE_MANAGER_APP_ID }}
+          private_key: ${{ secrets.RELEASE_MANAGER_APP_SECRET }}
+
+      - name: Set env
+        run: |
+          echo "REVISION=$(git rev-parse --short=9 HEAD)" >> $GITHUB_ENV
+
+      - name: Build and push image
+        run: |
+          echo ${AVALANCHE_VERSION}
+          docker build --build-arg GITHUB_TOKEN=${{ steps.generate_token.outputs.token }} --build-arg AVALANCHE_VERSION=${AVALANCHE_VERSION} -t ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION} -f ${DOCKERFILE} .
+          docker push ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
+          docker run --name dryrun --rm ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}  /avalanchego/build/avalanchego --version
+          docker rmi ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
+
+      - name: Lark Notification
+        continue-on-error: true
+        run: |
+          notiv3 "Blockchain avax latest image pushed 🎉" ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}

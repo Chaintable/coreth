@@ -1,0 +1,48 @@
+# ============= Compilation Stage ================
+FROM golang:1.23.8-bullseye AS builder
+
+ARG AVALANCHE_VERSION
+ARG GITHUB_TOKEN
+
+RUN mkdir -p $GOPATH/src/github.com/ava-labs
+WORKDIR $GOPATH/src/github.com/ava-labs
+
+RUN git clone https://github.com/ava-labs/avalanchego.git && \
+    cd avalanchego && \
+    git checkout $AVALANCHE_VERSION && \
+    cd ..
+
+# Copy coreth repo into desired location
+COPY . coreth
+
+# Set the workdir to AvalancheGo and update coreth dependency to local version
+WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
+# Run go mod download here to improve caching of AvalancheGo specific depednencies
+RUN go mod download
+# Replace the coreth dependency
+RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
+RUN git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com".insteadOf "https://github.com"
+RUN go mod download && go mod tidy
+
+# Build the AvalancheGo binary with local version of coreth.
+RUN ./scripts/build_avalanche.sh
+
+# Create the plugins directory in the standard location so the build directory will be recognized
+# as valid.
+RUN mkdir build/plugins
+
+# Download the pre-built avaxctl CLI to builder
+RUN wget https://debank-build-artifacts.s3.ap-northeast-1.amazonaws.com/downloads/avax/avaxctl -O build/avaxctl
+RUN chmod +x build/avaxctl
+
+# ============= Cleanup Stage ================
+FROM ubuntu:23.04
+
+# Maintain compatibility with previous images
+RUN mkdir -p /avalanchego/build
+WORKDIR /avalanchego/build
+
+# Copy the executables into the container
+COPY --from=builder /go/src/github.com/ava-labs/avalanchego/build .
+
+CMD [ "./avalanchego" ]
