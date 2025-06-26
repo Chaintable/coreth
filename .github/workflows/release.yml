@@ -1,4 +1,4 @@
-name: "Build new artifacts"
+name: "Release new artifacts"
 
 on:
   release:
