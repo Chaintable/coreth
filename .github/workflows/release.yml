@@ -10,7 +10,8 @@ env:
   REGISTRY: 294354037686.dkr.ecr.ap-northeast-1.amazonaws.com
   IMAGE: blockchain-avax-x
   DOCKERFILE: Dockerfile.debank
-  AVALANCHE_VERSION: v1.13.0
+  AVALANCHE_VERSION: v1.13.1
+  AWS_REGION: ap-northeast-1
 
 jobs:
   build-artifacts:
@@ -34,13 +35,26 @@ jobs:
         run: |
           echo "REVISION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
-      - name: Build and push image
-        run: |
-          echo ${AVALANCHE_VERSION}
-          docker build --build-arg GITHUB_TOKEN=${{ steps.generate_token.outputs.token }} --build-arg AVALANCHE_VERSION=${AVALANCHE_VERSION} -t ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION} -f ${DOCKERFILE} .
-          docker push ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
-          docker run --name dryrun --rm ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}  /avalanchego/build/avalanchego --version
-          docker rmi ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          file: ${{ env.DOCKERFILE }}
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ matrix.arch }}-${{ env.REVISION }}
+          build-args: |
+            ACCESS_TOKEN=${{ steps.generate-token.outputs.token }}
+            AVALANCHE_VERSION=${{ env.AVALANCHE_VERSION }}
+          provenance: false
 
       - name: Lark Notification
         continue-on-error: true
