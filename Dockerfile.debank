@@ -25,7 +25,7 @@ RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
 RUN go mod edit -replace github.com/consensys/gnark-crypto=github.com/consensys/gnark-crypto@v0.12.1
 RUN go mod edit -replace github.com/crate-crypto/go-ipa=github.com/crate-crypto/go-ipa@v0.0.0-20231025140028-3c0104f4b233
 
-RUN echo $GITHUB_TOKEN
+RUN echo "${GITHUB_TOKEN}"
 
 RUN git clone https://github.com/Chaintable/pipeline.git 
 
