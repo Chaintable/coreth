@@ -17,15 +17,20 @@ COPY . coreth
 
 # Set the workdir to AvalancheGo and update coreth dependency to local version
 WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
-# Run go mod download here to improve caching of AvalancheGo specific depednencies
-RUN go mod download
+
+RUN git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com".insteadOf "https://github.com"
+
 # Replace the coreth dependency
 RUN go mod edit -replace github.com/ava-labs/coreth=../coreth
-RUN git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com".insteadOf "https://github.com"
-RUN go mod download && go mod tidy
+RUN go mod edit -replace github.com/consensys/gnark-crypto=github.com/consensys/gnark-crypto@v0.12.1
+RUN go mod edit -replace github.com/crate-crypto/go-ipa=github.com/crate-crypto/go-ipa@v0.0.0-20231025140028-3c0104f4b233
+RUN go mod edit -replace github.com/ava-labs/libevm=github.com/Chaintable/libevm@v1.13.14-0.2.0.release-debank-3
+
+RUN GOSUMDB=off go mod tidy
+RUN go mod download
 
 # Build the AvalancheGo binary with local version of coreth.
-RUN ./scripts/build_avalanche.sh
+RUN ./scripts/build.sh
 
 # Create the plugins directory in the standard location so the build directory will be recognized
 # as valid.
@@ -36,7 +41,7 @@ RUN wget https://debank-build-artifacts.s3.ap-northeast-1.amazonaws.com/download
 RUN chmod +x build/avaxctl
 
 # ============= Cleanup Stage ================
-FROM ubuntu:23.04
+FROM ubuntu:24.04
 
 # Maintain compatibility with previous images
 RUN mkdir -p /avalanchego/build
