@@ -41,9 +41,7 @@ jobs:
           context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ matrix.arch }}-${{ env.REVISION }}
-          build-args: 
-            - ACCESS_TOKEN=${{ steps.generate-token.outputs.token }}
-            - AVALANCHE_VERSION=${{ env.AVALANCHE_VERSION }}
+          build-args: ACCESS_TOKEN=${{ steps.generate-token.outputs.token }},AVALANCHE_VERSION=${{ env.AVALANCHE_VERSION }}
           provenance: false
 
       - name: Lark Notification
