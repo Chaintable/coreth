@@ -244,7 +244,7 @@ type Config struct {
 	// RPC settings
 	HttpBodyLimit uint64 `json:"http-body-limit"`
 
-	VMTraceCfg *tracer.PipelineTracerConfig `json:"vm-trace-config,omitempty"`
+	VMTraceCfg *tracer.PipelineTracerConfig `json:"vm-trace-config"`
 }
 
 // TxPoolConfig contains the transaction pool config to be passed
