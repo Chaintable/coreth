@@ -43,6 +43,8 @@ RUN chmod +x build/avaxctl
 # ============= Cleanup Stage ================
 FROM ubuntu:24.04
 
+RUN apt-get update && apt-get install ca-certificates -y && update-ca-certificates
+
 # Maintain compatibility with previous images
 RUN mkdir -p /avalanchego/build
 WORKDIR /avalanchego/build

@@ -236,6 +236,12 @@ func New(
 		return nil, err
 	}
 
+	if config.VMTraceCfg == nil {
+		log.Warn("VM tracing is disabled, no VM traces will be recorded")
+	} else {
+		log.Info("VM tracing enabled", "config", *config.VMTraceCfg)
+	}
+
 	if config.VMTraceCfg != nil {
 		t, err := tracer.NewPipelineTracer(*config.VMTraceCfg)
 		if err != nil {
