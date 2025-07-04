@@ -431,6 +431,14 @@ func NewBlockChain(
 		bc.hooks.OnBlockchainInit(chainConfig)
 	}
 
+	if vmConfig.Tracer != nil {
+		if _, ok := vmConfig.Tracer.(*tracer.PipelineTracer); !ok {
+			log.Crit("vmConfig.Tracer must be a pipeline.Tracer")
+		} else {
+			bc.hooks = tracing.BuildHooks(vmConfig.Tracer.(*tracer.PipelineTracer))
+		}
+	}
+
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return nil, err
@@ -482,14 +490,6 @@ func NewBlockChain(
 	// Start tx indexer if it's enabled.
 	if bc.cacheConfig.TransactionHistory != 0 {
 		bc.txIndexer = newTxIndexer(bc.cacheConfig.TransactionHistory, bc)
-	}
-
-	if vmConfig.Tracer != nil {
-		if _, ok := vmConfig.Tracer.(*tracer.PipelineTracer); !ok {
-			log.Crit("vmConfig.Tracer must be a pipeline.Tracer")
-		} else {
-			bc.hooks = tracing.BuildHooks(vmConfig.Tracer.(*tracer.PipelineTracer))
-		}
 	}
 
 	if bc.hooks != nil && bc.hooks.OnGenesisBlock != nil {
