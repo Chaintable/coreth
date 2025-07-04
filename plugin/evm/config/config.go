@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Chaintable/pipeline/tracer"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/coreth/utils"
@@ -242,6 +243,8 @@ type Config struct {
 
 	// RPC settings
 	HttpBodyLimit uint64 `json:"http-body-limit"`
+
+	VMTraceCfg *tracer.PipelineTracerConfig `json:"vm-trace-config"`
 }
 
 // TxPoolConfig contains the transaction pool config to be passed
@@ -316,6 +319,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.PriceOptionSlowFeePercentage = defaultPriceOptionSlowFeePercentage
 	c.PriceOptionFastFeePercentage = defaultPriceOptionFastFeePercentage
 	c.PriceOptionMaxTip = defaultPriceOptionMaxTip
+	c.VMTraceCfg = nil
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) (err error) {

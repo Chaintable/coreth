@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/Chaintable/pipeline/tracer"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
@@ -92,6 +93,17 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 
+	// Iterate over and process the individual transactions
+	var pipelineTracer *tracer.PipelineTracer
+	if p, ok := cfg.Tracer.(*tracer.PipelineTracer); !ok {
+		log.Crit("vmConfig.Tracer must be a pipeline.Tracer")
+	} else {
+		pipelineTracer = p
+	}
+
+	statedb.OnCommit = pipelineTracer.OnCommit
+	statedb.OnLog = pipelineTracer.OnLog
+
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
@@ -102,7 +114,15 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
+		if pipelineTracer != nil {
+			pipelineTracer.OnTxStart(
+				tx, msg.From)
+		}
 		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		if pipelineTracer != nil {
+			receipt.SetEffectiveGasPrice(tx, vmenv.Context.BaseFee)
+			pipelineTracer.OnTxEnd(receipt, err)
+		}
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
