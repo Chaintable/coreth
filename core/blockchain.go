@@ -427,16 +427,16 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
-	if bc.hooks != nil && bc.hooks.OnBlockchainInit != nil {
-		bc.hooks.OnBlockchainInit(chainConfig)
-	}
-
 	if vmConfig.Tracer != nil {
 		if _, ok := vmConfig.Tracer.(*tracer.PipelineTracer); !ok {
 			log.Crit("vmConfig.Tracer must be a pipeline.Tracer")
 		} else {
 			bc.hooks = tracing.BuildHooks(vmConfig.Tracer.(*tracer.PipelineTracer))
 		}
+	}
+
+	if bc.hooks != nil && bc.hooks.OnBlockchainInit != nil {
+		bc.hooks.OnBlockchainInit(chainConfig)
 	}
 
 	// Re-generate current block state if it is missing
@@ -1779,7 +1779,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 		bc.hooks.OnBlockStart(current)
 	}
 	// Process previously stored block
-	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
+	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, bc.vmConfig)
 	if bc.hooks != nil && bc.hooks.OnBlockEnd != nil {
 		bc.hooks.OnBlockEnd(err)
 	}
