@@ -427,6 +427,10 @@ func NewBlockChain(
 	// Create the state manager
 	bc.stateManager = NewTrieWriter(bc.triedb, cacheConfig)
 
+	if bc.hooks != nil && bc.hooks.OnBlockchainInit != nil {
+		bc.hooks.OnBlockchainInit(chainConfig)
+	}
+
 	// Re-generate current block state if it is missing
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return nil, err
@@ -488,9 +492,6 @@ func NewBlockChain(
 		}
 	}
 
-	if bc.hooks != nil && bc.hooks.OnBlockchainInit != nil {
-		bc.hooks.OnBlockchainInit(chainConfig)
-	}
 	if bc.hooks != nil && bc.hooks.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			bc.hooks.OnGenesisBlock(bc.genesisBlock, genesis.Alloc)
@@ -1774,8 +1775,14 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	statedb.StartPrefetcher("chain", state.WithConcurrentWorkers(bc.cacheConfig.TriePrefetcherParallelism))
 	defer statedb.StopPrefetcher()
 
+	if bc.hooks != nil && bc.hooks.OnBlockStart != nil {
+		bc.hooks.OnBlockStart(current)
+	}
 	// Process previously stored block
 	receipts, _, usedGas, err := bc.processor.Process(current, parent.Header(), statedb, vm.Config{})
+	if bc.hooks != nil && bc.hooks.OnBlockEnd != nil {
+		bc.hooks.OnBlockEnd(err)
+	}
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to re-process block (%s: %d): %v", current.Hash().Hex(), current.NumberU64(), err)
 	}
