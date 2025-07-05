@@ -43,8 +43,8 @@ github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbi
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/Chaintable/libevm v1.13.14-0.2.0.release-debank-3 h1:eI8YFqMGawlooPINhmVjjfuG02Sck9JLs3LJhJgAAw8=
 github.com/Chaintable/libevm v1.13.14-0.2.0.release-debank-3/go.mod h1:+Iol+sVQ1KyoBsHf3veyrBmHCXr3xXRWq6ZXkgVfNLU=
-github.com/Chaintable/pipeline v0.0.52-libevm-v1.13.14-0.2.0.release-debank-2 h1:WsP6mUKM2jswsjS/RUs6Kaq0isS5OeHjuTi/TO10K5o=
-github.com/Chaintable/pipeline v0.0.52-libevm-v1.13.14-0.2.0.release-debank-2/go.mod h1:JiJkaYIRkwLFRROyBS1CDu6lKc9vMQQAr5wSzGhnQYQ=
+github.com/Chaintable/pipeline v0.0.53-libevm-v1.13.14-0.2.0.release-debank-1 h1:Bvy40ODO8BUDnlmphv2bJJ4DZSvNjPeKHdg8Wjwf1lU=
+github.com/Chaintable/pipeline v0.0.53-libevm-v1.13.14-0.2.0.release-debank-1/go.mod h1:JiJkaYIRkwLFRROyBS1CDu6lKc9vMQQAr5wSzGhnQYQ=
 github.com/CloudyKit/fastprinter v0.0.0-20200109182630-33d98a066a53/go.mod h1:+3IMCy2vIlbG1XG/0ggNQv0SvxCAIpPM5b1nCz56Xno=
 github.com/CloudyKit/jet/v3 v3.0.0/go.mod h1:HKQPgSJmdK8hdoAbKUUWajkHyHo4RaU5rMdUywE7VMo=
 github.com/DataDog/zstd v1.5.2 h1:vUG4lAyuPCXO0TLbXvPv7EB7cNK1QV/luu55UHLrrn8=
