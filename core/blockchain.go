@@ -436,6 +436,10 @@ func NewBlockChain(
 	}
 
 	if bc.hooks != nil && bc.hooks.OnBlockchainInit != nil {
+		metrics.NewRegisteredGaugeInfo("geth/info", nil).Update(metrics.GaugeInfoValue{
+			"arch": runtime.GOARCH,
+			"os":   runtime.GOOS,
+		})
 		bc.hooks.OnBlockchainInit(chainConfig)
 	}
 
