@@ -104,6 +104,24 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 				},
 			}},
 		}, nil
+	case metrics.GaugeInfo:
+		Lables := make([]*dto.LabelPair, 0, len(m.Snapshot().Value()))
+		for k, v := range m.Snapshot().Value() {
+			Lables = append(Lables, &dto.LabelPair{
+				Name:  ptrTo(k),
+				Value: ptrTo(v),
+			})
+		}
+		return &dto.MetricFamily{
+			Name: &name,
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{{
+				Label: Lables,
+				Gauge: &dto.Gauge{
+					Value: ptrTo(float64(1)),
+				},
+			}},
+		}, nil
 	case metrics.GaugeFloat64:
 		return &dto.MetricFamily{
 			Name: &name,
@@ -198,9 +216,6 @@ func metricFamily(registry Registry, name string) (mf *dto.MetricFamily, err err
 				},
 			}},
 		}, nil
-	case metrics.GaugeInfo:
-		// TODO(qdm12) handle this somehow maybe with dto.MetricType_UNTYPED
-		return nil, fmt.Errorf("%w: %q is a %T", errMetricSkip, name, metric)
 	default:
 		return nil, fmt.Errorf("%w: metric %q type %T", errMetricTypeNotSupported, name, metric)
 	}

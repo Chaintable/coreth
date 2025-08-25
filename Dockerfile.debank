@@ -4,10 +4,12 @@ FROM golang:1.23.9-bullseye AS builder
 ARG AVALANCHE_VERSION
 ARG ACCESS_TOKEN
 
+RUN git config --global url."https://x-access-token:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+
 RUN mkdir -p $GOPATH/src/github.com/ava-labs
 WORKDIR $GOPATH/src/github.com/ava-labs
 
-RUN git clone https://github.com/ava-labs/avalanchego.git && \
+RUN git clone https://github.com/Chaintable/avalanchego-x.git  avalanchego && \
     cd avalanchego && \
     git checkout $AVALANCHE_VERSION && \
     cd ..
@@ -18,7 +20,6 @@ COPY . coreth
 # Set the workdir to AvalancheGo and update coreth dependency to local version
 WORKDIR $GOPATH/src/github.com/ava-labs/avalanchego
 
-RUN git config --global url."https://x-access-token:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
 
 # Replace the coreth dependency
 RUN go mod edit -replace github.com/ava-labs/coreth=../coreth

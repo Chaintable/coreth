@@ -160,7 +160,7 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ava-labs/libevm => github.com/Chaintable/libevm v1.13.14-0.2.0.release-debank-3
+replace github.com/ava-labs/libevm => github.com/Chaintable/libevm v1.13.14-0.2.0.release-debank-5
 
 replace github.com/consensys/gnark-crypto => github.com/consensys/gnark-crypto v0.12.1
 
