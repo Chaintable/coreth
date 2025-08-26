@@ -98,16 +98,18 @@ var (
 	snapshotStorageReadTimer = getOrOverrideAsRegisteredCounter("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = getOrOverrideAsRegisteredCounter("chain/snapshot/commits", nil)
 
+	blockHeadNum = metrics.GetOrRegisterGauge("chain/snapshot/commits", nil)
+
 	triedbCommitTimer = getOrOverrideAsRegisteredCounter("chain/triedb/commits", nil)
 
-	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/block/inserts", nil)
-	blockInsertCount            = metrics.GetOrRegisterCounter("chain/block/inserts/count", nil)
-	blockContentValidationTimer = metrics.GetOrRegisterCounter("chain/block/validations/content", nil)
-	blockStateInitTimer         = metrics.GetOrRegisterCounter("chain/block/inits/state", nil)
-	blockExecutionTimer         = metrics.GetOrRegisterCounter("chain/block/executions", nil)
-	blockTrieOpsTimer           = metrics.GetOrRegisterCounter("chain/block/trie", nil)
-	blockValidationTimer        = metrics.GetOrRegisterCounter("chain/block/validations/state", nil)
-	blockWriteTimer             = metrics.GetOrRegisterCounter("chain/block/writes", nil)
+	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/inserts", nil)
+	blockContentValidationTimer = metrics.GetOrRegisterCounter("chain/validations/content", nil)
+	blockInsertCount            = metrics.GetOrRegisterCounter("chain/inserts/count", nil)
+	blockStateInitTimer         = metrics.GetOrRegisterCounter("chain/inits/state", nil)
+	blockExecutionTimer         = metrics.GetOrRegisterCounter("chain/execution", nil)
+	blockTrieOpsTimer           = metrics.GetOrRegisterCounter("chain/trie", nil)
+	blockValidationTimer        = metrics.GetOrRegisterCounter("chain/validation", nil)
+	blockWriteTimer             = metrics.GetOrRegisterCounter("chain/write", nil)
 
 	acceptorQueueGauge           = metrics.GetOrRegisterGauge("chain/acceptor/queue/size", nil)
 	acceptorWorkTimer            = metrics.GetOrRegisterCounter("chain/acceptor/work", nil)
@@ -1475,6 +1477,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	triedbCommitTimer.Inc(statedb.TrieDBCommits.Milliseconds())     // Trie database commits are complete, we can mark them
 	blockWriteTimer.Inc((time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits).Milliseconds())
 	blockInsertTimer.Inc(time.Since(start).Milliseconds())
+	blockHeadNum.Update(int64(block.NumberU64()))
 
 	log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 		"parentHash", block.ParentHash(),
