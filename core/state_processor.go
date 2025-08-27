@@ -101,8 +101,10 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 		pipelineTracer = p
 	}
 
-	statedb.OnCommit = pipelineTracer.OnCommit
-	statedb.OnLog = pipelineTracer.OnLog
+	if pipelineTracer != nil {
+		statedb.OnCommit = pipelineTracer.OnCommit
+		statedb.OnLog = pipelineTracer.OnLog
+	}
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
