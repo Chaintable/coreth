@@ -96,13 +96,15 @@ func (p *StateProcessor) Process(block *types.Block, parent *types.Header, state
 	// Iterate over and process the individual transactions
 	var pipelineTracer *tracer.PipelineTracer
 	if p, ok := cfg.Tracer.(*tracer.PipelineTracer); !ok {
-		log.Crit("vmConfig.Tracer must be a pipeline.Tracer")
+		log.Warn("vmConfig.Tracer must be a pipeline.Tracer")
 	} else {
 		pipelineTracer = p
 	}
 
-	statedb.OnCommit = pipelineTracer.OnCommit
-	statedb.OnLog = pipelineTracer.OnLog
+	if pipelineTracer != nil {
+		statedb.OnCommit = pipelineTracer.OnCommit
+		statedb.OnLog = pipelineTracer.OnLog
+	}
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
