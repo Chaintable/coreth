@@ -98,7 +98,7 @@ var (
 	snapshotStorageReadTimer = metrics.GetOrRegisterTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.GetOrRegisterTimer("chain/snapshot/commits", nil)
 
-	blockHeadNum = metrics.GetOrRegisterGauge("chain/snapshot/commits", nil)
+	blockHeadNum = metrics.GetOrRegisterGauge("chain/head/block", nil)
 
 	triedbCommitTimer = metrics.GetOrRegisterTimer("chain/triedb/commits", nil)
 
