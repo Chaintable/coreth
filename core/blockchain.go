@@ -104,7 +104,6 @@ var (
 
 	blockInsertTimer            = metrics.GetOrRegisterTimer("chain/inserts", nil)
 	blockContentValidationTimer = metrics.GetOrRegisterTimer("chain/validations/content", nil)
-	blockInsertCount            = metrics.GetOrRegisterCounter("chain/inserts/count", nil)
 	blockStateInitTimer         = metrics.GetOrRegisterTimer("chain/inits/state", nil)
 	blockExecutionTimer         = metrics.GetOrRegisterTimer("chain/execution", nil)
 	blockTrieOpsTimer           = metrics.GetOrRegisterTimer("chain/trie", nil)
@@ -113,7 +112,6 @@ var (
 
 	acceptorQueueGauge           = metrics.GetOrRegisterGauge("chain/acceptor/queue/size", nil)
 	acceptorWorkTimer            = metrics.GetOrRegisterTimer("chain/acceptor/work", nil)
-	acceptorWorkCount            = metrics.GetOrRegisterCounter("chain/acceptor/work/count", nil)
 	processedBlockGasUsedCounter = metrics.GetOrRegisterCounter("chain/block/gas/used/processed", nil)
 	acceptedBlockGasUsedCounter  = metrics.GetOrRegisterCounter("chain/block/gas/used/accepted", nil)
 	badBlockCounter              = metrics.GetOrRegisterCounter("chain/block/bad/count", nil)
@@ -636,7 +634,6 @@ func (bc *BlockChain) startAcceptor() {
 		bc.acceptorWg.Done()
 
 		acceptorWorkTimer.UpdateSince(start)
-		acceptorWorkCount.Inc(1)
 		// Note: in contrast to most accepted metrics, we increment the accepted log metrics in the acceptor queue because
 		// the logs are already processed in the acceptor queue.
 		acceptedLogsCounter.Inc(int64(len(logs)))
@@ -1489,7 +1486,6 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	processedTxsCounter.Inc(int64(block.Transactions().Len()))
 	processedLogsCounter.Inc(int64(len(logs)))
-	blockInsertCount.Inc(1)
 	return nil
 }
 
