@@ -3,7 +3,7 @@ module github.com/ava-labs/coreth
 go 1.23.9
 
 require (
-	github.com/Chaintable/pipeline v0.0.53-libevm-v1.13.14-0.2.0.release-debank-5
+	github.com/Chaintable/pipeline v0.0.53-libevm-v1.13.14-0.2.0.release-debank-6
 	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/ava-labs/avalanchego v1.13.1-rc.3
 	github.com/ava-labs/libevm v1.13.14-0.2.0.release
