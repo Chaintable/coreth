@@ -1,5 +1,5 @@
 # ============= Compilation Stage ================
-FROM golang:1.24.9-bullseye AS builder
+FROM golang:1.24.9-trixie AS builder
 
 ARG AVALANCHE_VERSION
 ARG ACCESS_TOKEN
