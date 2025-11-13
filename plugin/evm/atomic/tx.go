@@ -10,23 +10,21 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/holiman/uint256"
-
-	"github.com/ava-labs/coreth/params/extras"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/libevm/common"
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/params/extras"
 )
 
 var _ gossip.Gossipable = (*Tx)(nil)
@@ -39,8 +37,9 @@ const (
 var (
 	ErrWrongNetworkID = errors.New("tx was issued with a different network ID")
 	ErrNilTx          = errors.New("tx is nil")
-	errNoValueOutput  = errors.New("output has no value")
+	ErrNoValueOutput  = errors.New("output has no value")
 	ErrNoValueInput   = errors.New("input has no value")
+	ErrNoGasUsed      = errors.New("no gas used")
 	errNilOutput      = errors.New("nil output")
 	errNilInput       = errors.New("nil input")
 	errEmptyAssetID   = errors.New("empty asset ID is not valid")
@@ -68,12 +67,12 @@ type EVMOutput struct {
 	AssetID ids.ID         `serialize:"true" json:"assetID"`
 }
 
-func (o EVMOutput) Compare(other EVMOutput) int {
-	addrComp := bytes.Compare(o.Address.Bytes(), other.Address.Bytes())
+func (out EVMOutput) Compare(other EVMOutput) int {
+	addrComp := bytes.Compare(out.Address.Bytes(), other.Address.Bytes())
 	if addrComp != 0 {
 		return addrComp
 	}
-	return bytes.Compare(o.AssetID[:], other.AssetID[:])
+	return bytes.Compare(out.AssetID[:], other.AssetID[:])
 }
 
 // EVMInput defines an input created from the EVM state to fund export transactions
@@ -84,12 +83,12 @@ type EVMInput struct {
 	Nonce   uint64         `serialize:"true" json:"nonce"`
 }
 
-func (i EVMInput) Compare(other EVMInput) int {
-	addrComp := bytes.Compare(i.Address.Bytes(), other.Address.Bytes())
+func (in EVMInput) Compare(other EVMInput) int {
+	addrComp := bytes.Compare(in.Address.Bytes(), other.Address.Bytes())
 	if addrComp != 0 {
 		return addrComp
 	}
-	return bytes.Compare(i.AssetID[:], other.AssetID[:])
+	return bytes.Compare(in.AssetID[:], other.AssetID[:])
 }
 
 // Verify ...
@@ -98,7 +97,7 @@ func (out *EVMOutput) Verify() error {
 	case out == nil:
 		return errNilOutput
 	case out.Amount == 0:
-		return errNoValueOutput
+		return ErrNoValueOutput
 	case out.AssetID == ids.Empty:
 		return errEmptyAssetID
 	}
@@ -120,7 +119,6 @@ func (in *EVMInput) Verify() error {
 
 type AtomicBlockContext interface {
 	AtomicTxs() []*Tx
-	snowman.Block
 }
 
 // Visitor allows executing custom logic against the underlying transaction types.
@@ -290,6 +288,37 @@ func SortEVMInputsAndSigners(inputs []EVMInput, signers [][]*secp256k1.PrivateKe
 	sort.Sort(&innerSortInputsAndSigners{inputs: inputs, signers: signers})
 }
 
+// EffectiveGasPrice returns the price per gas that the transaction is paying
+// denominated in aAVAX/gas.
+//
+// The result is rounded down to the nearest aAVAX/gas.
+func EffectiveGasPrice(
+	tx UnsignedTx,
+	avaxAssetID ids.ID,
+	isApricotPhase5 bool,
+) (uint256.Int, error) {
+	gasUsed, err := tx.GasUsed(isApricotPhase5)
+	if err != nil {
+		return uint256.Int{}, err
+	}
+	if gasUsed == 0 {
+		return uint256.Int{}, ErrNoGasUsed
+	}
+	burned, err := tx.Burned(avaxAssetID)
+	if err != nil {
+		return uint256.Int{}, err
+	}
+
+	var bigGasUsed uint256.Int
+	bigGasUsed.SetUint64(gasUsed)
+
+	var gasPrice uint256.Int // gasPrice = burned * x2cRate / gasUsed
+	gasPrice.SetUint64(burned)
+	gasPrice.Mul(&gasPrice, X2CRate)
+	gasPrice.Div(&gasPrice, &bigGasUsed)
+	return gasPrice, nil
+}
+
 // calculates the amount of AVAX that must be burned by an atomic transaction
 // that consumes [cost] at [baseFee].
 func CalculateDynamicFee(cost uint64, baseFee *big.Int) (uint64, error) {
@@ -308,6 +337,6 @@ func CalculateDynamicFee(cost uint64, baseFee *big.Int) (uint64, error) {
 	return fee.Uint64(), nil
 }
 
-func calcBytesCost(len int) uint64 {
-	return uint64(len) * TxBytesGas
+func calcBytesCost(n int) uint64 {
+	return uint64(n) * TxBytesGas
 }

@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"runtime"
 	"testing"
@@ -40,19 +41,26 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 type testBackend struct {
 	db                ethdb.Database
@@ -460,6 +468,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		1: {FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		2: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(100)},
 		3: {Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+		4: {Addresses: make([]common.Address, maxAddresses+1)},
 	}
 
 	for i, test := range testCases {
@@ -486,6 +495,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
 		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
 		3: {BlockHash: &blockHash, Topics: [][]common.Hash{{}, {}, {}, {}, {}}},
+		4: {BlockHash: &blockHash, Addresses: make([]common.Address, maxAddresses+1)},
 	}
 
 	for i, test := range testCases {
@@ -890,5 +900,5 @@ func TestGetLogsRegression(t *testing.T) {
 	test := FilterCriteria{BlockHash: &common.Hash{}, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}
 
 	_, err := api.GetLogs(context.Background(), test)
-	require.Error(t, err, "unknown block")
+	require.ErrorContains(t, err, "unknown block")
 }

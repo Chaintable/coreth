@@ -8,13 +8,14 @@ import (
 	"errors"
 	"math/big"
 
-	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+
+	ethereum "github.com/ava-labs/libevm"
 )
 
-// NotFound is returned by API methods if the requested item does not exist.
-var NotFound = errors.New("not found")
+// ErrNotFound is returned by API methods if the requested item does not exist.
+var ErrNotFound = errors.New("not found")
 
 // Subscription represents an event subscription where events are
 // delivered on a data channel.

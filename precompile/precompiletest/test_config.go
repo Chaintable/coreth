@@ -6,16 +6,17 @@ package precompiletest
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 // ConfigVerifyTest is a test case for verifying a config
 type ConfigVerifyTest struct {
 	Config        precompileconfig.Config
 	ChainConfig   precompileconfig.ChainConfig
-	ExpectedError string
+	ExpectedError error
 }
 
 // ConfigEqualTest is a test case for comparing two configs
@@ -39,11 +40,7 @@ func RunVerifyTests(t *testing.T, tests map[string]ConfigVerifyTest) {
 				chainConfig = mockChainConfig
 			}
 			err := test.Config.Verify(chainConfig)
-			if test.ExpectedError == "" {
-				require.NoError(err)
-			} else {
-				require.ErrorContains(err, test.ExpectedError)
-			}
+			require.ErrorIs(err, test.ExpectedError)
 		})
 	}
 }

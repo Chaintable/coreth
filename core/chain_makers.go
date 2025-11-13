@@ -32,12 +32,14 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
@@ -317,7 +319,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil)
+		statedb, err := state.New(parent.Root(), extstate.NewDatabaseWithNodeDB(db, triedb), nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -373,13 +375,14 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + gap*1000
 
 	config := params.GetExtra(cm.config)
-	gasLimit, err := header.GasLimit(config, parent.Header(), time)
+	gasLimit, err := customheader.GasLimit(config, parent.Header(), timeMS)
 	if err != nil {
 		panic(err)
 	}
-	baseFee, err := header.BaseFee(config, parent.Header(), time)
+	baseFee, err := customheader.BaseFee(config, parent.Header(), timeMS)
 	if err != nil {
 		panic(err)
 	}
@@ -408,6 +411,11 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
+	}
+
+	if config.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.TimeMilliseconds = &timeMS
 	}
 	return header
 }

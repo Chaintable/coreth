@@ -9,15 +9,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/holiman/uint256"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/math"
@@ -28,6 +22,13 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 )
 
 var (
@@ -35,10 +36,10 @@ var (
 	_                           secp256k1fx.UnsignedTx = (*UnsignedExportTx)(nil)
 	ErrExportNonAVAXInputBanff                         = errors.New("export input cannot contain non-AVAX in Banff")
 	ErrExportNonAVAXOutputBanff                        = errors.New("export output cannot contain non-AVAX in Banff")
+	ErrInsufficientFunds                               = errors.New("insufficient funds")
+	ErrInvalidNonce                                    = errors.New("invalid nonce")
 	ErrNoExportOutputs                                 = errors.New("tx has no export outputs")
 	errOverflowExport                                  = errors.New("overflow when computing export amount + txFee")
-	errInsufficientFunds                               = errors.New("insufficient funds")
-	errInvalidNonce                                    = errors.New("invalid nonce")
 )
 
 // UnsignedExportTx is an unsigned ExportTx
@@ -134,7 +135,7 @@ func (utx *UnsignedExportTx) Verify(
 func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
 	byteCost := calcBytesCost(len(utx.Bytes()))
 	numSigs := uint64(len(utx.Ins))
-	sigCost, err := math.Mul64(numSigs, secp256k1fx.CostPerSignature)
+	sigCost, err := math.Mul(numSigs, secp256k1fx.CostPerSignature)
 	if err != nil {
 		return 0, err
 	}
@@ -279,7 +280,7 @@ func NewExportTx(
 		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
 	default:
 		var newAvaxNeeded uint64
-		newAvaxNeeded, err = math.Add64(avaxNeeded, ap0.AtomicTxFee)
+		newAvaxNeeded, err = math.Add(avaxNeeded, ap0.AtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
@@ -322,19 +323,19 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 				uint256.NewInt(X2CRate.Uint64()),
 			)
 			if state.GetBalance(from.Address).Cmp(amount) < 0 {
-				return errInsufficientFunds
+				return ErrInsufficientFunds
 			}
 			state.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
 			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
-				return errInsufficientFunds
+				return ErrInsufficientFunds
 			}
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
 		if state.GetNonce(from.Address) != from.Nonce {
-			return errInvalidNonce
+			return ErrInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}
@@ -392,7 +393,7 @@ func getSpendableFunds(
 	}
 
 	if amount > 0 {
-		return nil, nil, errInsufficientFunds
+		return nil, nil, ErrInsufficientFunds
 	}
 
 	return inputs, signers, nil
@@ -486,7 +487,7 @@ func getSpendableAVAXWithFee(
 	}
 
 	if amount > 0 {
-		return nil, nil, errInsufficientFunds
+		return nil, nil, ErrInsufficientFunds
 	}
 
 	return inputs, signers, nil

@@ -5,17 +5,13 @@ package evm
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/txpool/legacypool"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -24,6 +20,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/core/txpool/legacypool"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
 
 func TestGossipEthTxMarshaller(t *testing.T) {
@@ -59,7 +62,7 @@ func TestGossipSubscribe(t *testing.T) {
 	// use a custom bloom filter to test the bloom filter reset
 	gossipTxPool.bloom, err = gossip.NewBloomFilter(prometheus.NewRegistry(), "", 1, 0.01, 0.0000000000000001) // maxCount =1
 	require.NoError(err)
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	go gossipTxPool.Subscribe(ctx)
 
@@ -108,4 +111,27 @@ func setupPoolWithConfig(t *testing.T, config *params.ChainConfig, fundedAddress
 	require.NoError(t, err)
 
 	return txPool
+}
+
+func getValidEthTxs(key *ecdsa.PrivateKey, count int, gasPrice *big.Int) []*types.Transaction {
+	res := make([]*types.Transaction, count)
+
+	to := common.Address{}
+	amount := big.NewInt(0)
+	gasLimit := uint64(37000)
+
+	for i := 0; i < count; i++ {
+		tx, _ := types.SignTx(
+			types.NewTransaction(
+				uint64(i),
+				to,
+				amount,
+				gasLimit,
+				gasPrice,
+				[]byte(strings.Repeat("aaaaaaaaaa", 100))),
+			types.HomesteadSigner{}, key)
+		tx.SetTime(time.Now().Add(-1 * time.Minute))
+		res[i] = tx
+	}
+	return res
 }

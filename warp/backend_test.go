@@ -4,7 +4,6 @@
 package warp
 
 import (
-	"context"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
@@ -13,10 +12,12 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/warp/warptest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/warp/warptest"
+
+	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
 var (
@@ -52,12 +53,12 @@ func TestAddAndGetValidMessage(t *testing.T) {
 	require.NoError(t, backend.AddMessage(testUnsignedMessage))
 
 	// Verify that a signature is returned successfully, and compare to expected signature.
-	signature, err := backend.GetMessageSignature(context.TODO(), testUnsignedMessage)
+	signature, err := backend.GetMessageSignature(t.Context(), testUnsignedMessage)
 	require.NoError(t, err)
 
 	expectedSig, err := warpSigner.Sign(testUnsignedMessage)
 	require.NoError(t, err)
-	require.Equal(t, expectedSig, signature[:])
+	require.Equal(t, expectedSig, signature)
 }
 
 func TestAddAndGetUnknownMessage(t *testing.T) {
@@ -71,8 +72,8 @@ func TestAddAndGetUnknownMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try getting a signature for a message that was not added.
-	_, err = backend.GetMessageSignature(context.TODO(), testUnsignedMessage)
-	require.Error(t, err)
+	_, err = backend.GetMessageSignature(t.Context(), testUnsignedMessage)
+	require.ErrorIs(t, err, ErrVerifyWarpMessage)
 }
 
 func TestGetBlockSignature(t *testing.T) {
@@ -96,12 +97,12 @@ func TestGetBlockSignature(t *testing.T) {
 	expectedSig, err := warpSigner.Sign(unsignedMessage)
 	require.NoError(err)
 
-	signature, err := backend.GetBlockSignature(context.TODO(), blkID)
+	signature, err := backend.GetBlockSignature(t.Context(), blkID)
 	require.NoError(err)
-	require.Equal(expectedSig, signature[:])
+	require.Equal(expectedSig, signature)
 
-	_, err = backend.GetBlockSignature(context.TODO(), ids.GenerateTestID())
-	require.Error(err)
+	_, err = backend.GetBlockSignature(t.Context(), ids.GenerateTestID())
+	require.ErrorIs(err, ErrValidateBlock)
 }
 
 func TestZeroSizedCache(t *testing.T) {
@@ -120,12 +121,12 @@ func TestZeroSizedCache(t *testing.T) {
 	require.NoError(t, backend.AddMessage(testUnsignedMessage))
 
 	// Verify that a signature is returned successfully, and compare to expected signature.
-	signature, err := backend.GetMessageSignature(context.TODO(), testUnsignedMessage)
+	signature, err := backend.GetMessageSignature(t.Context(), testUnsignedMessage)
 	require.NoError(t, err)
 
 	expectedSig, err := warpSigner.Sign(testUnsignedMessage)
 	require.NoError(t, err)
-	require.Equal(t, expectedSig, signature[:])
+	require.Equal(t, expectedSig, signature)
 }
 
 func TestOffChainMessages(t *testing.T) {
@@ -149,11 +150,11 @@ func TestOffChainMessages(t *testing.T) {
 				require.NoError(err)
 				require.Equal(testUnsignedMessage.Bytes(), msg.Bytes())
 
-				signature, err := b.GetMessageSignature(context.TODO(), testUnsignedMessage)
+				signature, err := b.GetMessageSignature(t.Context(), testUnsignedMessage)
 				require.NoError(err)
 				expectedSignatureBytes, err := warpSigner.Sign(msg)
 				require.NoError(err)
-				require.Equal(expectedSignatureBytes, signature[:])
+				require.Equal(expectedSignatureBytes, signature)
 			},
 		},
 		"unknown message": {

@@ -14,13 +14,16 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/log"
+
+	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
 var (
 	_                         Backend = (*backend)(nil)
+	ErrValidateBlock                  = errors.New("failed to validate block message")
+	ErrVerifyWarpMessage              = errors.New("failed to verify warp message")
 	errParsingOffChainMessage         = errors.New("failed to parse off-chain message")
 
 	messageCacheSize = 500
@@ -43,8 +46,6 @@ type Backend interface {
 	GetBlockSignature(ctx context.Context, blockID ids.ID) ([]byte, error)
 
 	// GetMessage retrieves the [unsignedMessage] from the warp backend database if available
-	// TODO: After Etna, the backend no longer needs to store the mapping from messageHash
-	// to unsignedMessage (and this method can be removed).
 	GetMessage(messageHash ids.ID) (*avalancheWarp.UnsignedMessage, error)
 
 	acp118.Verifier
@@ -138,7 +139,7 @@ func (b *backend) GetMessageSignature(ctx context.Context, unsignedMessage *aval
 	}
 
 	if err := b.Verify(ctx, unsignedMessage, nil); err != nil {
-		return nil, fmt.Errorf("failed to validate warp message: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrVerifyWarpMessage, err)
 	}
 	return b.signMessage(unsignedMessage)
 }
@@ -161,7 +162,7 @@ func (b *backend) GetBlockSignature(ctx context.Context, blockID ids.ID) ([]byte
 	}
 
 	if err := b.verifyBlockMessage(ctx, blockHashPayload); err != nil {
-		return nil, fmt.Errorf("failed to validate block message: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrValidateBlock, err)
 	}
 
 	sig, err := b.signMessage(unsignedMessage)

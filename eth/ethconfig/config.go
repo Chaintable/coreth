@@ -44,7 +44,7 @@ import (
 // DefaultFullGPOConfig contains default gasprice oracle settings for full node.
 var DefaultFullGPOConfig = gasprice.Config{
 	Blocks:              40,
-	Percentile:          60,
+	Percentile:          40,
 	MaxLookbackSeconds:  gasprice.DefaultMaxLookbackSeconds,
 	MaxCallBlockHistory: gasprice.DefaultMaxCallBlockHistory,
 	MaxBlockHistory:     gasprice.DefaultMaxBlockHistory,
@@ -76,7 +76,7 @@ func NewDefaultConfig() Config {
 	}
 }
 
-//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
+//go:generate go tool -modfile=../../tools/go.mod gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for ETH and LES protocols.
 type Config struct {
@@ -142,7 +142,7 @@ type Config struct {
 
 	// HistoricalProofQueryWindow is the number of blocks before the last accepted block to be accepted for state queries.
 	// For archive nodes, it defaults to 43200 and can be set to 0 to indicate to accept any block query.
-	// For non-archive nodes, it is forcibly set to the value of [core.TipBufferSize].
+	// For non-archive nodes, it is forcibly set to the value of StateHistory.
 	HistoricalProofQueryWindow uint64
 
 	// AllowUnprotectedTxs allow unprotected transactions to be locally issued.

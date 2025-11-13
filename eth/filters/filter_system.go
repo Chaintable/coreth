@@ -36,11 +36,11 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
@@ -292,6 +292,9 @@ func (es *EventSystem) subscribe(sub *subscription) *Subscription {
 func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*types.Log) (*Subscription, error) {
 	if len(crit.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
+	}
+	if len(crit.Addresses) > maxAddresses {
+		return nil, errExceedMaxAddresses
 	}
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {

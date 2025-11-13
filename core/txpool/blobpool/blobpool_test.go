@@ -40,20 +40,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
 	"github.com/ava-labs/libevm/log"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
@@ -61,8 +63,8 @@ import (
 
 var (
 	emptyBlob          = kzg4844.Blob{}
-	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+	emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
+	emptyBlobProof, _  = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
 	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 )
 
@@ -72,6 +74,9 @@ var (
 var testChainConfig *params.ChainConfig
 
 func init() {
+	params.RegisterExtras()
+	customtypes.Register()
+
 	testChainConfig = new(params.ChainConfig)
 	*testChainConfig = params.Copy(params.TestChainConfig)
 
@@ -117,8 +122,12 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 			Extra:    make([]byte, ap3.WindowSize),
 		}
 		config := params.GetExtra(bc.config)
-		baseFee, err := header.BaseFee(
-			config, parent, blockTime,
+		timeMS := blockTime * 1000
+		if config.IsGranite(blockTime) {
+			customtypes.GetHeaderExtra(parent).TimeMilliseconds = &timeMS
+		}
+		baseFee, err := customheader.BaseFee(
+			config, parent, timeMS,
 		)
 		if err != nil {
 			panic(err)
@@ -148,7 +157,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	}
 	excessBlobGas := lo.Uint64()
 
-	return &types.Header{
+	head := &types.Header{
 		Number:        blockNumber,
 		Time:          blockTime,
 		GasLimit:      gasLimit,
@@ -156,6 +165,11 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		ExcessBlobGas: &excessBlobGas,
 		Extra:         make([]byte, ap3.WindowSize),
 	}
+	if params.GetExtra(bc.config).IsGranite(blockTime) {
+		timeMS := blockTime * 1000
+		customtypes.GetHeaderExtra(head).TimeMilliseconds = &timeMS
+	}
+	return head
 }
 
 func (bc *testBlockChain) CurrentFinalBlock() *types.Header {
@@ -585,7 +599,7 @@ func TestOpenDrops(t *testing.T) {
 	chain := &testBlockChain{
 		config:  testChainConfig,
 		basefee: uint256.NewInt(ap3.MinBaseFee),
-		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		blobfee: uint256.NewInt(ethparams.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
@@ -704,7 +718,7 @@ func TestOpenIndex(t *testing.T) {
 	chain := &testBlockChain{
 		config:  testChainConfig,
 		basefee: uint256.NewInt(ap3.MinBaseFee),
-		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		blobfee: uint256.NewInt(ethparams.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain)
@@ -1263,7 +1277,7 @@ func TestAdd(t *testing.T) {
 				},
 				{ // Same as above but blob fee cap equals minimum, should be accepted
 					from: "alice",
-					tx:   makeUnsignedTx(0, 1, 1, params.BlobTxMinBlobGasprice),
+					tx:   makeUnsignedTx(0, 1, 1, ethparams.BlobTxMinBlobGasprice),
 					err:  nil,
 				},
 			},
@@ -1338,7 +1352,7 @@ func BenchmarkPoolPending10GB(b *testing.B)  { benchmarkPoolPending(b, 10_000_00
 func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	// Calculate the maximum number of transaction that would fit into the pool
 	// and generate a set of random accounts to seed them with.
-	capacity := datacap / params.BlobTxBlobGasPerBlob
+	capacity := datacap / ethparams.BlobTxBlobGasPerBlob
 
 	var (
 		basefee    = uint64(1050)

@@ -6,9 +6,12 @@ package extras
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/ava-labs/avalanchego/upgrade"
+
 	"github.com/ava-labs/coreth/utils"
+
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -261,6 +264,11 @@ type AvalancheRules struct {
 	IsGranite                                                                           bool
 }
 
+// IsGraniteActivated is used by the warp precompile to determine which gas costs to use.
+func (a AvalancheRules) IsGraniteActivated() bool {
+	return a.IsGranite
+}
+
 func (n *NetworkUpgrades) GetAvalancheRules(timestamp uint64) AvalancheRules {
 	return AvalancheRules{
 		IsApricotPhase1:     n.IsApricotPhase1(timestamp),
@@ -284,5 +292,5 @@ func ptrToString(val *uint64) string {
 	if val == nil {
 		return "nil"
 	}
-	return fmt.Sprintf("%d", *val)
+	return strconv.FormatUint(*val, 10)
 }

@@ -34,16 +34,16 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	ethparams "github.com/ava-labs/libevm/params"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFeeHistory(t *testing.T) {
-	var cases = []struct {
+	cases := []struct {
 		pending      bool
 		maxCallBlock uint64
 		maxBlock     uint64
@@ -82,7 +82,7 @@ func TestFeeHistory(t *testing.T) {
 			MaxBlockHistory:     c.maxBlock,
 		}
 		tip := big.NewInt(1 * params.GWei)
-		backend := newTestBackendFakerEngine(t, params.TestChainConfig, 32, common.Big0, func(i int, b *core.BlockGen) {
+		backend := newTestBackendFakerEngine(t, 32, func(i int, b *core.BlockGen) {
 			signer := types.LatestSigner(params.TestChainConfig)
 
 			b.SetCoinbase(common.Address{1})
@@ -95,7 +95,7 @@ func TestFeeHistory(t *testing.T) {
 				ChainID:   params.TestChainConfig.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
-				Gas:       params.TxGas,
+				Gas:       ethparams.TxGas,
 				GasFeeCap: feeCap,
 				GasTipCap: tip,
 				Data:      []byte{},
