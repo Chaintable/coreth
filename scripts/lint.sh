@@ -21,6 +21,7 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
 # Read excluded directories into arrays
 DEFAULT_FILES=()
 UPSTREAM_FILES=()
+AVALANCHE_LINT_FILE=""
 function read_dirs {
   local upstream_folders_file="./scripts/upstream_files.txt"
   # Read the upstream_folders file into an array
@@ -43,6 +44,9 @@ function read_dirs {
   local -a upstream_find_args=()
   local -a upstream_exclude_args=()
   for line in "${upstream_folders[@]}"; do
+    # Skip empty lines
+    [[ -z "$line" ]] && continue
+
     if [[ "$line" == !* ]]; then
       # Excluding files with !
       upstream_exclude_args+=(! -path "./${line:1}")
@@ -69,15 +73,37 @@ function read_dirs {
 
   # Now find default files (exclude already licensed ones)
   mapfile -t DEFAULT_FILES < <(find . "${find_filters[@]}" "${default_exclude_args[@]}")
+
+  # copy avalanche file to temp directory to edit
+  AVALANCHE_LINT_FILE="$(mktemp -d)/.avalanche-golangci.yml"
+  echo "Avalanche lint file at: $AVALANCHE_LINT_FILE"
+  cp .avalanche-golangci.yml "$AVALANCHE_LINT_FILE"
+
+  # Exclude all upstream files dynamically
+  echo "    paths-except:" >> "$AVALANCHE_LINT_FILE"
+  for f in "${UPSTREAM_FILES[@]}"; do
+    # exclude pre-pended "./"
+    echo "      - \"${f:2}\$\"" >> "$AVALANCHE_LINT_FILE"
+  done
 }
 
-# by default, "./scripts/lint.sh" runs all linft tests
+# by default, "./scripts/lint.sh" runs all lint tests
 # to run only "license_header" test
 # TESTS='license_header' ./scripts/lint.sh
-TESTS=${TESTS:-"golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests"}
+TESTS=${TESTS:-"golangci_lint avalanche_golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests"}
 
 function test_golangci_lint {
-  go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63 run --config .golangci.yml
+  go tool -modfile=tools/go.mod golangci-lint run --config .golangci.yml
+}
+
+function test_avalanche_golangci_lint {
+  if [[ ! -f $AVALANCHE_LINT_FILE ]]; then
+    return 0
+  fi
+
+  go tool -modfile=tools/go.mod golangci-lint run \
+  --config "$AVALANCHE_LINT_FILE" \
+  || return 1
 }
 
 # automatically checks license headers
@@ -89,19 +115,21 @@ function test_license_header {
   if [[ ${#UPSTREAM_FILES[@]} -gt 0 ]]; then
     echo "Running license tool on upstream files with header for upstream..."
     # shellcheck disable=SC2086
-    go run github.com/palantir/go-license@v1.25.0 \
+    go tool -modfile=tools/go.mod go-license \
       --config=./license_header_for_upstream.yml \
       ${_addlicense_flags} \
-      "${UPSTREAM_FILES[@]}"
+      "${UPSTREAM_FILES[@]}" \
+      || return 1
   fi
 
   if [[ ${#DEFAULT_FILES[@]} -gt 0 ]]; then
     echo "Running license tool on remaining files with default header..."
     # shellcheck disable=SC2086
-    go run github.com/palantir/go-license@v1.25.0 \
+    go tool -modfile=tools/go.mod go-license \
       --config=./license_header.yml \
       ${_addlicense_flags} \
-      "${DEFAULT_FILES[@]}"
+      "${DEFAULT_FILES[@]}" \
+      || return 1
   fi
 }
 
@@ -120,9 +148,17 @@ function test_require_error_is_no_funcs_as_params {
 }
 
 function test_require_no_error_inline_func {
-  if grep -R -zo -P '\t+err :?= ((?!require|if).|\n)*require\.NoError\((t, )?err\)' "${DEFAULT_FILES[@]}"; then
+  # Flag only when a single variable whose name contains "err" or "Err"
+  # (e.g., err, myErr, parseError) is assigned from a call (:= or =), and later
+  # that same variable is passed to require.NoError(...). We explicitly require
+  # no commas on the LHS to avoid flagging multi-return assignments like
+  # "val, err := f()" or "err, val := f()".
+  #
+  # Capture the variable name and enforce it matches in the subsequent require.NoError.
+  local -r pattern='^\s*([A-Za-z_][A-Za-z0-9_]*[eE]rr[A-Za-z0-9_]*)\s*:?=\s*[^,\n]*\([^)]*\).*\n(?:(?!^\s*(?:if|require)).*\n)*^\s*require\.NoError\((?:t,\s*)?\1\)'
+  if grep -R -zo -P "$pattern" "${DEFAULT_FILES[@]}"; then
     echo ""
-    echo "Checking that a function with a single error return doesn't error should be done in-line."
+    echo "Checking that a function with a single error return doesn't error should be done in-line (single LHS var containing 'err')."
     echo ""
     return 1
   fi

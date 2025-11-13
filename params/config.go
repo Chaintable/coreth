@@ -30,10 +30,9 @@ package params
 import (
 	"math/big"
 
-	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/libevm"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -47,10 +46,39 @@ var (
 	AvalancheLocalChainID = big.NewInt(43112)
 )
 
-// Guarantees extras initialisation before a call to [params.ChainConfig.Rules].
-var _ = libevmInit()
+func init() {
+	libevm.WithTemporaryExtrasLock(func(l libevm.ExtrasLock) error {
+		return WithTempRegisteredExtras(l, func() error {
+			initialiseChainConfigs()
+			return nil
+		})
+	})
+}
 
 var (
+	TestChainConfig,
+	TestLaunchConfig,
+	TestApricotPhase1Config,
+	TestApricotPhase2Config,
+	TestApricotPhase3Config,
+	TestApricotPhase4Config,
+	TestApricotPhase5Config,
+	TestApricotPhasePre6Config,
+	TestApricotPhase6Config,
+	TestApricotPhasePost6Config,
+	TestBanffChainConfig,
+	TestCortinaChainConfig,
+	TestDurangoChainConfig,
+	TestEtnaChainConfig,
+	TestFortunaChainConfig,
+	TestGraniteChainConfig *ChainConfig
+
+	TestRules Rules
+)
+
+// initialiseChainConfigs MUST be called inside [WithTempRegisteredExtras] to
+// allow [WithExtra] to work without global registration of libevm extras.
+func initialiseChainConfigs() {
 	TestChainConfig = WithExtra(
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -67,8 +95,8 @@ var (
 			MuirGlacierBlock:    big.NewInt(0),
 			BerlinBlock:         big.NewInt(0),
 			LondonBlock:         big.NewInt(0),
-			ShanghaiTime:        utils.TimeToNewUint64(upgrade.GetConfig(constants.UnitTestID).DurangoTime),
-			CancunTime:          utils.TimeToNewUint64(upgrade.GetConfig(constants.UnitTestID).EtnaTime),
+			ShanghaiTime:        utils.NewUint64(0),
+			CancunTime:          utils.NewUint64(0),
 		},
 		extras.TestChainConfig,
 	)
@@ -376,7 +404,7 @@ var (
 	)
 
 	TestRules = TestChainConfig.Rules(new(big.Int), IsMergeTODO, 0)
-)
+}
 
 // ChainConfig is the core config which determines the blockchain settings.
 //

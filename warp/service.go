@@ -8,40 +8,36 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/network"
-	"github.com/ava-labs/coreth/warp/aggregator"
-	warpValidators "github.com/ava-labs/coreth/warp/validators"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/log"
+
+	warpprecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
 )
 
 var errNoValidators = errors.New("cannot aggregate signatures from subnet with no validators")
 
 // API introduces snowman specific functionality to the evm
 type API struct {
-	chainContext                 *snow.Context
-	backend                      Backend
-	signatureGetter              aggregator.SignatureGetter
-	requirePrimaryNetworkSigners func() bool
+	chainContext        *snow.Context
+	backend             Backend
+	signatureAggregator *acp118.SignatureAggregator
 }
 
-func NewAPI(chainCtx *snow.Context, networkCodec codec.Manager, backend Backend, client network.SyncedNetworkClient, requirePrimaryNetworkSigners func() bool) *API {
-	signatureGetter := aggregator.NewSignatureGetter(client, networkCodec)
+func NewAPI(chainCtx *snow.Context, backend Backend, signatureAggregator *acp118.SignatureAggregator) *API {
 	return &API{
-		backend:                      backend,
-		chainContext:                 chainCtx,
-		signatureGetter:              signatureGetter,
-		requirePrimaryNetworkSigners: requirePrimaryNetworkSigners,
+		backend:             backend,
+		chainContext:        chainCtx,
+		signatureAggregator: signatureAggregator,
 	}
 }
 
 // GetMessage returns the Warp message associated with a messageID.
-func (a *API) GetMessage(ctx context.Context, messageID ids.ID) (hexutil.Bytes, error) {
+func (a *API) GetMessage(_ context.Context, messageID ids.ID) (hexutil.Bytes, error) {
 	message, err := a.backend.GetMessage(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message %s with error %w", messageID, err)
@@ -59,7 +55,7 @@ func (a *API) GetMessageSignature(ctx context.Context, messageID ids.ID) (hexuti
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signature for message %s with error %w", messageID, err)
 	}
-	return signature[:], nil
+	return signature, nil
 }
 
 // GetBlockSignature returns the BLS signature associated with a blockID.
@@ -68,7 +64,7 @@ func (a *API) GetBlockSignature(ctx context.Context, blockID ids.ID) (hexutil.By
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signature for block %s with error %w", blockID, err)
 	}
-	return signature[:], nil
+	return signature, nil
 }
 
 // GetMessageAggregateSignature fetches the aggregate signature for the requested [messageID]
@@ -109,8 +105,7 @@ func (a *API) aggregateSignatures(ctx context.Context, unsignedMessage *warp.Uns
 		return nil, err
 	}
 
-	state := warpValidators.NewState(validatorState, a.chainContext.SubnetID, a.chainContext.ChainID, a.requirePrimaryNetworkSigners())
-	validatorSet, err := warp.GetCanonicalValidatorSetFromSubnetID(ctx, state, pChainHeight, subnetID)
+	validatorSet, err := validatorState.GetWarpValidatorSet(ctx, pChainHeight, subnetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator set: %w", err)
 	}
@@ -124,14 +119,23 @@ func (a *API) aggregateSignatures(ctx context.Context, unsignedMessage *warp.Uns
 		"numValidators", len(validatorSet.Validators),
 		"totalWeight", validatorSet.TotalWeight,
 	)
-
-	agg := aggregator.New(a.signatureGetter, validatorSet.Validators, validatorSet.TotalWeight)
-	signatureResult, err := agg.AggregateSignatures(ctx, unsignedMessage, quorumNum)
+	warpMessage := &warp.Message{
+		UnsignedMessage: *unsignedMessage,
+		Signature:       &warp.BitSetSignature{},
+	}
+	signedMessage, _, _, err := a.signatureAggregator.AggregateSignatures(
+		ctx,
+		warpMessage,
+		nil,
+		validatorSet.Validators,
+		quorumNum,
+		warpprecompile.WarpQuorumDenominator,
+	)
 	if err != nil {
 		return nil, err
 	}
 	// TODO: return the signature and total weight as well to the caller for more complete details
 	// Need to decide on the best UI for this and write up documentation with the potential
 	// gotchas that could impact signed messages becoming invalid.
-	return hexutil.Bytes(signatureResult.Message.Bytes()), nil
+	return hexutil.Bytes(signedMessage.Bytes()), nil
 }

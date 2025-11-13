@@ -7,28 +7,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 // PredicateTest defines a unit test/benchmark for verifying a precompile predicate.
 type PredicateTest struct {
+	Name string
+
 	Config precompileconfig.Config
 
 	PredicateContext *precompileconfig.PredicateContext
 
-	PredicateBytes []byte
-	Gas            uint64
-	GasErr         error
-	ExpectedErr    error
+	Predicate   predicate.Predicate
+	Rules       precompileconfig.Rules
+	Gas         uint64
+	GasErr      error
+	ExpectedErr error
 }
 
 func (test PredicateTest) Run(t testing.TB) {
 	t.Helper()
 	require := require.New(t)
-	predicate := test.Config.(precompileconfig.Predicater)
+	predicater := test.Config.(precompileconfig.Predicater)
 
-	predicateGas, predicateGasErr := predicate.PredicateGas(test.PredicateBytes)
+	predicateGas, predicateGasErr := predicater.PredicateGas(test.Predicate, test.Rules)
 	require.ErrorIs(predicateGasErr, test.GasErr)
 	if test.GasErr != nil {
 		return
@@ -36,15 +41,15 @@ func (test PredicateTest) Run(t testing.TB) {
 
 	require.Equal(test.Gas, predicateGas)
 
-	predicateRes := predicate.VerifyPredicate(test.PredicateContext, test.PredicateBytes)
+	predicateRes := predicater.VerifyPredicate(test.PredicateContext, test.Predicate)
 	require.ErrorIs(predicateRes, test.ExpectedErr)
 }
 
-func RunPredicateTests(t *testing.T, predicateTests map[string]PredicateTest) {
+func RunPredicateTests(t *testing.T, tests []PredicateTest) {
 	t.Helper()
 
-	for name, test := range predicateTests {
-		t.Run(name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
 			test.Run(t)
 		})
 	}
@@ -70,11 +75,11 @@ func (test PredicateTest) RunBenchmark(b *testing.B) {
 	b.ReportMetric(float64(mgasps)/100, "mgas/s")
 }
 
-func RunPredicateBenchmarks(b *testing.B, predicateTests map[string]PredicateTest) {
+func RunPredicateBenchmarks(b *testing.B, tests []PredicateTest) {
 	b.Helper()
 
-	for name, test := range predicateTests {
-		b.Run(name, func(b *testing.B) {
+	for _, test := range tests {
+		b.Run(test.Name, func(b *testing.B) {
 			test.RunBenchmark(b)
 		})
 	}

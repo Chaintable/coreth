@@ -34,23 +34,28 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
+//go:generate go tool -modfile=../tools/go.mod gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
@@ -230,7 +235,7 @@ func (g *Genesis) trieConfig() *triedb.Config {
 
 // TODO: migrate this function to "flush" for more similarity with upstream.
 func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	statedb, err := state.New(types.EmptyRootHash, extstate.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		panic(err)
 	}
@@ -268,18 +273,37 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	head.Root = root
 
 	if g.GasLimit == 0 {
-		head.GasLimit = params.GenesisGasLimit
+		head.GasLimit = ethparams.GenesisGasLimit
 	}
 	if g.Difficulty == nil {
-		head.Difficulty = params.GenesisDifficulty
+		head.Difficulty = ethparams.GenesisDifficulty
+	}
+	if g.ExtraData == nil {
+		head.Extra = []byte{}
 	}
 	if conf := g.Config; conf != nil {
 		num := new(big.Int).SetUint64(g.Number)
-		if params.GetExtra(conf).IsApricotPhase3(g.Timestamp) {
+		confExtra := params.GetExtra(conf)
+		if confExtra.IsApricotPhase3(g.Timestamp) {
 			if g.BaseFee != nil {
 				head.BaseFee = g.BaseFee
 			} else {
 				head.BaseFee = big.NewInt(ap3.InitialBaseFee)
+			}
+		}
+		headerExtra := customtypes.GetHeaderExtra(head)
+
+		// When Etna/Cancun is active, `BlockGasCost` and `ExtDataGasUsed` are decoded to 0 if it's nil.
+		// This is because these fields come before the other optional Cancun fields in RLP order.
+		// This only occurs with a serialized and written genesis block, and then reading it back.
+		// While this does not affect anything (because we don't use `ToBlock` to retrieve the genesis block),
+		// it's still confusing and breaking few tests. So we set it here to 0 to make it consistent.
+		if confExtra.IsEtna(g.Timestamp) {
+			if headerExtra.ExtDataGasUsed == nil {
+				headerExtra.ExtDataGasUsed = new(big.Int)
+			}
+			if headerExtra.BlockGasCost == nil {
+				headerExtra.BlockGasCost = new(big.Int)
 			}
 		}
 		if conf.IsCancun(num, g.Timestamp) {
@@ -297,9 +321,21 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 		}
+		// Granite: set TimeMilliseconds
+		if confExtra.IsGranite(g.Timestamp) {
+			headerExtra.TimeMilliseconds = new(uint64)
+			*headerExtra.TimeMilliseconds = g.Timestamp * 1000
+
+			headerExtra.MinDelayExcess = new(acp226.DelayExcess)
+			*headerExtra.MinDelayExcess = acp226.InitialDelayExcess
+		}
 	}
 
-	if _, err := statedb.Commit(0, false); err != nil {
+	// Create the genesis block to use the block hash
+	block := types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(common.Hash{}, block.Hash())
+
+	if _, err := statedb.Commit(0, false, stateconf.WithTrieDBUpdateOpts(triedbOpt)); err != nil {
 		panic(fmt.Sprintf("unable to commit genesis block to statedb: %v", err))
 	}
 	// Commit newly generated states into disk if it's not empty.
@@ -308,7 +344,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			panic(fmt.Sprintf("unable to commit genesis block: %v", err))
 		}
 	}
-	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	return block
 }
 
 // Commit writes the block and state of a genesis specification to the database.

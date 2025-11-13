@@ -4,24 +4,24 @@
 package warp
 
 import (
-	"fmt"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
 	"github.com/ava-labs/coreth/utils"
-	"go.uber.org/mock/gomock"
 )
 
 func TestVerify(t *testing.T) {
 	tests := map[string]precompiletest.ConfigVerifyTest{
 		"quorum numerator less than minimum": {
 			Config:        NewConfig(utils.NewUint64(3), WarpQuorumNumeratorMinimum-1, false),
-			ExpectedError: fmt.Sprintf("cannot specify quorum numerator (%d) < min quorum numerator (%d)", WarpQuorumNumeratorMinimum-1, WarpQuorumNumeratorMinimum),
+			ExpectedError: ErrInvalidQuorumRatio,
 		},
 		"quorum numerator greater than quorum denominator": {
 			Config:        NewConfig(utils.NewUint64(3), WarpQuorumDenominator+1, false),
-			ExpectedError: fmt.Sprintf("cannot specify quorum numerator (%d) > quorum denominator (%d)", WarpQuorumDenominator+1, WarpQuorumDenominator),
+			ExpectedError: ErrInvalidQuorumRatio,
 		},
 		"default quorum numerator": {
 			Config: NewDefaultConfig(utils.NewUint64(3)),
@@ -39,7 +39,7 @@ func TestVerify(t *testing.T) {
 				config.EXPECT().IsDurango(gomock.Any()).Return(false)
 				return config
 			}(),
-			ExpectedError: errWarpCannotBeActivated.Error(),
+			ExpectedError: errWarpCannotBeActivated,
 		},
 	}
 	precompiletest.RunVerifyTests(t, tests)

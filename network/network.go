@@ -10,11 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"github.com/ava-labs/libevm/log"
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
@@ -24,6 +19,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
+	"github.com/ava-labs/libevm/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/ava-labs/coreth/network/stats"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -37,7 +35,9 @@ const (
 
 var (
 	errAcquiringSemaphore                      = errors.New("error acquiring semaphore")
+	errEmptyNodeID                             = errors.New("cannot send request to empty nodeID")
 	errExpiredRequest                          = errors.New("expired request")
+	errNoPeersFound                            = errors.New("no peers found matching version")
 	_                     Network              = (*network)(nil)
 	_                     validators.Connector = (*network)(nil)
 	_                     common.AppHandler    = (*network)(nil)
@@ -87,7 +87,7 @@ type Network interface {
 	Size() uint32
 
 	// NewClient returns a client to send messages with for the given protocol
-	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
+	NewClient(protocol uint64) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
 
@@ -129,7 +129,19 @@ func NewNetwork(
 	maxActiveAppRequests int64,
 	registerer prometheus.Registerer,
 ) (Network, error) {
-	p2pNetwork, err := p2p.NewNetwork(ctx.Log, appSender, registerer, "p2p")
+	p2pValidators := p2p.NewValidators(
+		ctx.Log,
+		ctx.SubnetID,
+		ctx.ValidatorState,
+		maxValidatorSetStaleness,
+	)
+	p2pNetwork, err := p2p.NewNetwork(
+		ctx.Log,
+		appSender,
+		registerer,
+		"p2p",
+		p2pValidators,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
@@ -143,7 +155,7 @@ func NewNetwork(
 		appRequestHandler:          message.NoopRequestHandler{},
 		peers:                      NewPeerTracker(),
 		appStats:                   stats.NewRequestHandlerStats(),
-		p2pValidators:              p2p.NewValidators(p2pNetwork.Peers, ctx.Log, ctx.SubnetID, ctx.ValidatorState, maxValidatorSetStaleness),
+		p2pValidators:              p2pValidators,
 	}, nil
 }
 
@@ -165,18 +177,22 @@ func (n *network) SendAppRequestAny(ctx context.Context, minVersion *version.App
 
 	n.lock.Lock()
 	defer n.lock.Unlock()
-	if nodeID, ok := n.peers.GetAnyPeer(minVersion); ok {
+	nodeID, ok, err := n.peers.GetAnyPeer(minVersion)
+	if err != nil {
+		return ids.EmptyNodeID, err
+	}
+	if ok {
 		return nodeID, n.sendAppRequest(ctx, nodeID, request, handler)
 	}
 
 	n.activeAppRequests.Release(1)
-	return ids.EmptyNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
+	return ids.EmptyNodeID, fmt.Errorf("%w: version: %s, numPeers: %d", errNoPeersFound, minVersion, n.peers.Size())
 }
 
 // SendAppRequest sends request message bytes to specified nodeID, notifying the responseHandler on response or failure
 func (n *network) SendAppRequest(ctx context.Context, nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
 	if nodeID == ids.EmptyNodeID {
-		return fmt.Errorf("cannot send request to empty nodeID, nodeID=%s, requestLen=%d", nodeID, len(request))
+		return fmt.Errorf("%w, nodeID=%s, requestLen=%d", errEmptyNodeID, nodeID, len(request))
 	}
 
 	// If the context was cancelled, we can skip sending this request.
@@ -480,8 +496,8 @@ func (n *network) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, r
 	return waitingHandler.WaitForResult(ctx)
 }
 
-func (n *network) NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client {
-	return n.sdkNetwork.NewClient(protocol, options...)
+func (n *network) NewClient(protocol uint64) *p2p.Client {
+	return n.sdkNetwork.NewClient(protocol, n.p2pValidators)
 }
 
 func (n *network) AddHandler(protocol uint64, handler p2p.Handler) error {

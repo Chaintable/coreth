@@ -32,20 +32,39 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus"
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 )
 
-func init() {
+// RegisterExtras registers hooks with libevm to achieve Avalanche behaviour of
+// the EVM. It MUST NOT be called more than once and therefore is only allowed
+// to be used in tests and `package main`, to avoid polluting other packages
+// that transitively depend on this one but don't need registration.
+func RegisterExtras() {
+	// Although the registration function refers to just Hooks (not Extras) this
+	// will be changed in the future to standardise across libevm, hence the
+	// name of the function we're in.
 	vm.RegisterHooks(hooks{})
+}
+
+// WithTempRegisteredExtras runs `fn` with temporary registration otherwise
+// equivalent to a call to [RegisterExtras], but limited to the life of `fn`.
+//
+// This function is not intended for direct use. Use
+// `evm.WithTempRegisteredLibEVMExtras()` instead as it calls this along with
+// all other temporary-registration functions.
+func WithTempRegisteredExtras(lock libevm.ExtrasLock, fn func() error) error {
+	return vm.WithTempRegisteredHooks(lock, hooks{}, fn)
 }
 
 type hooks struct{}
@@ -76,20 +95,31 @@ func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm
 	return args
 }
 
-func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
+func wrapStateDB(rules params.Rules, statedb vm.StateDB) vm.StateDB {
+	wrappedStateDB := extstate.New(statedb.(*state.StateDB))
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
-		db = &StateDbAP1{db.(extstate.VmStateDB)}
+		return wrappedStateDB
 	}
-	return extstate.New(db.(extstate.VmStateDB))
+	return &StateDBAP0{wrappedStateDB}
 }
 
-type StateDbAP1 struct {
-	extstate.VmStateDB
+// StateDBAP0 implements the GetCommittedState behavior that existed prior to
+// the AP1 upgrade.
+//
+// Since launch, state keys have been normalized to allow for multicoin
+// balances. However, at launch GetCommittedState was not updated. This meant
+// that gas refunds were not calculated as expected for SSTORE opcodes.
+//
+// This oversight was fixed in AP1, but in order to execute blocks prior to AP1
+// and generate the same merkle root, this behavior must be maintained.
+//
+// See the [extstate] package for details around state key normalization.
+type StateDBAP0 struct {
+	*extstate.StateDB
 }
 
-func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
-	state.NormalizeStateKey(&key)
-	return s.VmStateDB.GetCommittedState(addr, key)
+func (s *StateDBAP0) GetCommittedState(addr common.Address, key common.Hash, _ ...stateconf.StateDBStateOption) common.Hash {
+	return s.StateDB.GetCommittedState(addr, key, stateconf.SkipStateKeyTransformation())
 }
 
 // ChainContext supports retrieving headers and consensus parameters from the

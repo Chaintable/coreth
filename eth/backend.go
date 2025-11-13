@@ -39,7 +39,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/bloombits"
 	"github.com/ava-labs/coreth/core/state/pruner"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
@@ -56,6 +55,7 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/accounts"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/bloombits"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
@@ -152,7 +152,7 @@ func New(
 		"snapshot clean", common.StorageSize(config.SnapshotCache)*1024*1024,
 	)
 
-	scheme, err := rawdb.ParseStateScheme(config.StateScheme, chainDb)
+	scheme, err := customrawdb.ParseStateSchemeExt(config.StateScheme, chainDb)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +203,13 @@ func New(
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+
+	// If the context is not set, avoid a panic. Only necessary during firewood use.
+	chainDataDir := ""
+	if ctx := params.GetExtra(config.Genesis.Config).SnowCtx; ctx != nil {
+		chainDataDir = ctx.ChainDataDir
+	}
+
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
@@ -229,6 +236,7 @@ func New(
 			SkipTxIndexing:                  config.SkipTxIndexing,
 			StateHistory:                    config.StateHistory,
 			StateScheme:                     scheme,
+			ChainDataDir:                    chainDataDir,
 		}
 	)
 
@@ -287,6 +295,9 @@ func New(
 		allowUnfinalizedQueries:    config.AllowUnfinalizedQueries,
 		historicalProofQueryWindow: config.HistoricalProofQueryWindow,
 		eth:                        eth,
+	}
+	if config.Pruning {
+		eth.APIBackend.historicalProofQueryWindow = config.StateHistory
 	}
 	if config.AllowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")

@@ -5,15 +5,17 @@ package state
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-
 	"github.com/ava-labs/libevm/trie"
 )
+
+var errKeyLength = errors.New("atomic trie key length invalid")
 
 type atomicTrieIterator struct {
 	trieIterator *trie.Iterator // underlying trie.Iterator
@@ -51,7 +53,7 @@ func (a *atomicTrieIterator) Next() bool {
 	// If the key has an unexpected length, set the error and stop the iteration since the data is
 	// no longer reliable.
 	if keyLen != TrieKeyLength {
-		a.resetFields(fmt.Errorf("expected atomic trie key length to be %d but was %d", TrieKeyLength, keyLen))
+		a.resetFields(fmt.Errorf("%w: expected %d but was %d", errKeyLength, TrieKeyLength, keyLen))
 		return false
 	}
 
