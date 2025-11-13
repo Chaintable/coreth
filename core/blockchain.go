@@ -1916,11 +1916,10 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	// This may occur if we are running in archive mode where every block's trie is committed on insertion
 	// or during an unclean shutdown.
 	if acceptorTip != (common.Hash{}) {
-		// current = bc.GetBlockByHash(acceptorTip)
-		// if current == nil {
-		// 	return fmt.Errorf("failed to get block for acceptor tip %s", acceptorTip)
-		// }
-		current = bc.GetBlockByNumber(1)
+		current = bc.GetBlockByHash(acceptorTip)
+		if current == nil {
+			return fmt.Errorf("failed to get block for acceptor tip %s", acceptorTip)
+		}
 	}
 
 	// Find a historic available state root
