@@ -37,19 +37,9 @@ RUN ./scripts/build.sh
 # as valid.
 RUN mkdir build/plugins
 
-# Download the pre-built avaxctl CLI to builder (arch-aware).
-# amd64 uses the published binary; arm64 tries avaxctl-arm64 and skips with a warning if
-# absent, so the arm64 image never ships an amd64 binary. avalanchego is the main process.
-RUN ARCH="$(dpkg --print-architecture)"; \
-    BASE="https://debank-build-artifacts.s3.ap-northeast-1.amazonaws.com/downloads/avax"; \
-    if [ "$ARCH" = "amd64" ]; then \
-      wget "$BASE/avaxctl" -O build/avaxctl && chmod +x build/avaxctl; \
-    elif wget -q "$BASE/avaxctl-$ARCH" -O build/avaxctl; then \
-      chmod +x build/avaxctl; \
-    else \
-      echo "WARN: no avaxctl build for $ARCH; image ships without avaxctl"; \
-      rm -f build/avaxctl; \
-    fi
+# Download the pre-built avaxctl CLI to builder
+RUN wget https://debank-build-artifacts.s3.ap-northeast-1.amazonaws.com/downloads/avax/avaxctl -O build/avaxctl
+RUN chmod +x build/avaxctl
 
 # ============= Cleanup Stage ================
 FROM ubuntu:24.04
