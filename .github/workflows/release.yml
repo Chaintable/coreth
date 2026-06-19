@@ -17,7 +17,7 @@ jobs:
   build-artifacts:
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64]
     runs-on: [self-hosted, "${{ matrix.arch }}"]
     permissions:
       contents: read
@@ -97,7 +97,7 @@ jobs:
 
       - name: Merge manifest
         run: |
-          docker buildx imagetools create --tag ${REGISTRY}/${IMAGE}:${REVISION} --tag ${REGISTRY}/${IMAGE}:latest ${REGISTRY}/${IMAGE}:amd64-${REVISION} ${REGISTRY}/${IMAGE}:arm64-${REVISION}
+          docker buildx imagetools create --tag ${REGISTRY}/${IMAGE}:${REVISION} --tag ${REGISTRY}/${IMAGE}:latest ${REGISTRY}/${IMAGE}:amd64-${REVISION}
 
       # - name: Lark Notification
       #   continue-on-error: true
