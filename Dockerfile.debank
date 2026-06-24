@@ -2,9 +2,9 @@
 FROM golang:1.24.9-trixie AS builder
 
 ARG AVALANCHE_VERSION
-ARG ACCESS_TOKEN
+ARG ACCESS_TOKEN=""
 
-RUN git config --global url."https://x-access-token:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+RUN if [ -n "$ACCESS_TOKEN" ]; then git config --global url."https://x-access-token:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"; fi
 
 RUN mkdir -p $GOPATH/src/github.com/ava-labs
 WORKDIR $GOPATH/src/github.com/ava-labs

@@ -18,21 +18,33 @@ jobs:
     strategy:
       matrix:
         arch: [amd64]
-    runs-on: [self-hosted, "${{ matrix.arch }}"]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
       - name: Checkout coreth
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: tibdex/github-app-token@v1
+      - name: Generate app token
         id: generate-token
+        uses: actions/create-github-app-token@v1
         with:
-          app_id: ${{ secrets.RELEASE_MANAGER_APP_ID }}
-          private_key: ${{ secrets.RELEASE_MANAGER_APP_SECRET }}
+          app-id: ${{ secrets.RELEASE_MANAGER_APP_ID }}
+          private-key: ${{ secrets.RELEASE_MANAGER_APP_SECRET }}
+          owner: ${{ github.repository_owner }}
 
       - name: Set env
         run: |
@@ -50,6 +62,9 @@ jobs:
         with:
           registry-type: public
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build image
         uses: docker/build-push-action@v6
         with:
@@ -61,8 +76,3 @@ jobs:
             ACCESS_TOKEN=${{ steps.generate-token.outputs.token }}
             AVALANCHE_VERSION=${{ env.AVALANCHE_VERSION }}
           provenance: false
-
-      - name: Lark Notification
-        continue-on-error: true
-        run: |
-          notiv3 "Blockchain avax latest image pushed 🎉" ${REGISTRY}/${IMAGE}:${{ matrix.arch }}-${REVISION}
